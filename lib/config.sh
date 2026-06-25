@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # lib/config.sh - locate and load KB configuration. Source me.
-set -uo pipefail
 
 kb_project_dir() { printf '%s' "${CLAUDE_PROJECT_DIR:-$PWD}"; }
 
