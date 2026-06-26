@@ -14,11 +14,13 @@ The engine ships two parts that stay separate:
 ### Option A: Claude Code plugin (primary)
 
 ```sh
-/plugin marketplace add <path-to-this-repo>
+/plugin marketplace add larstonder/kb-engine
 /plugin install knowledge-base
 ```
 
-The plugin wires the five lifecycle hooks automatically via `hooks/hooks.json`.
+This registers the engine as a plugin: it wires the five lifecycle hooks automatically (via `hooks/hooks.json`, resolved through `${CLAUDE_PLUGIN_ROOT}`) and adds the `/kb` slash command used to scaffold content (below).
+
+To develop against a local checkout instead, point the marketplace at the directory: `/plugin marketplace add ~/path/to/kb-engine`. (Prefer the GitHub source for normal use — a local directory source copies untracked files into the plugin cache.)
 
 ### Option B: install.sh (non-plugin fallback)
 
@@ -32,21 +34,25 @@ This copies `hooks/`, `lib/`, and `skills/knowledge-base/` under `<project-dir>/
 
 ## Set up a content repo
 
+With the plugin installed, run the `/kb` slash command from inside the project you want a KB for:
+
+```
+/kb init <kb-dir> --preset general|monorepo [--mode standalone|submodule] [--branch <branch>]
+/kb sync
+```
+
+`/kb` wraps the bundled CLI (the plugin doesn't put `kb` on your `PATH`). If you installed via `install.sh` or a plain clone instead, call the CLI directly from the engine repo, passing `--project`:
+
 ```sh
-bin/kb init <kb-dir> --preset general|monorepo \
+./bin/kb init <kb-dir> --preset general|monorepo \
             [--categories a,b,c] \
             [--mode standalone|submodule] \
             [--branch <branch>] \
-            [--project <project-dir>]
+            --project <project-dir>
+./bin/kb sync --project <project-dir>
 ```
 
-`init` creates the category folders, copies content-template files (CONVENTIONS.md, INDEX.md, BACKLOG.md, README.md, .gitignore, .gitattributes), vendors the validators into `<kb-dir>/.kb/bin/`, installs the git pre-commit hook, and writes `.kbconfig` in the project root.
-
-To re-vendor validators after an engine update:
-
-```sh
-bin/kb sync --project <project-dir>
-```
+`init` creates the category folders, copies content-template files (CONVENTIONS.md, INDEX.md, BACKLOG.md, README.md, .gitignore, .gitattributes), vendors the validators into `<kb-dir>/.kb/bin/`, installs the git pre-commit hook, and writes `.kbconfig` in the project root. `sync` re-vendors the validators and re-installs the pre-commit hook after an engine update. The lifecycle hooks no-op in any project without a `.kbconfig`, so the KB only becomes active once `init` has run (and from the next session start).
 
 ---
 
