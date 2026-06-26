@@ -7,7 +7,8 @@ cd "$(dirname "$0")/.."
 work="tests/.work/git"; rm -rf "$work"; mkdir -p "$work"
 KB_DIR_ABS="$work"; KB_MODE="standalone"; KB_BRANCH="main"
 kb_git init -q
-kb_git config user.email t@t; kb_git config user.name t
+git -C "$work" config user.email t@t
+git -C "$work" config user.name t
 assert_eq "" "$(kb_git_dirty)" "clean tree -> empty dirty"
 printf 'x\n' > "$work/a.txt"
 assert_contains "$(kb_git_dirty)" "a.txt" "new file -> dirty shows it"

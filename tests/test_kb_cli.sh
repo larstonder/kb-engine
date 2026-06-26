@@ -12,10 +12,10 @@ assert_file "$work/.knowledge/.git/hooks/pre-commit"
 assert_eq "yes" "$([ -d "$work/.knowledge/glossary" ] && echo yes || echo no)" "glossary dir exists"
 # Pre-commit actually rejects an invalid entry.
 cd "$work/.knowledge"
-git config user.email t@t; git config user.name t
+git config user.email test@example.com; git config user.name test
 printf -- '---\ntype: gotcha\ntitle: X\nconfidence: observed\ncreated: 01.01.2026\nupdated: 01.01.2026\nseverity: nope\n---\nB\n' > gotchas/bad.md
 git add gotchas/bad.md
-git commit -m "x" >/dev/null 2>&1; rc=$?
+git -c user.email=test@example.com -c user.name=test commit -m "x" >/dev/null 2>&1; rc=$?
 cd "$ENGINE"
 assert_eq "1" "$rc" "pre-commit blocks invalid entry"
 errlog_ignored="$(git -C "$work/.knowledge" check-ignore .kb-push-errors.log >/dev/null 2>&1 && echo yes || echo no)"

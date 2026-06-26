@@ -17,8 +17,8 @@ bash install.sh --project "$PROJ" >/dev/null 2>&1
 bash bin/kb init "$KB" --preset general --project "$PROJ" >/dev/null 2>&1
 
 # Set git identity and ensure branch is named 'main'.
-git -C "$KB" config user.email t@t
-git -C "$KB" config user.name t
+git -C "$KB" config user.email test@example.com
+git -C "$KB" config user.name test
 git -C "$KB" branch -m main 2>/dev/null || true
 
 # Create a bare remote with NO branches yet and add it as origin.
