@@ -17,6 +17,7 @@ cmd_init() {
     --project)    project="$2"; shift 2;;
     *) die "unknown flag: $1";;
   esac; done
+  case "$mode" in standalone|submodule) ;; *) die "mode must be standalone or submodule";; esac
   local presetf="$ENGINE_DIR/presets/$preset.json"
   [ -f "$presetf" ] || die "no such preset: $preset"
   mkdir -p "$dir"
@@ -64,7 +65,7 @@ install_hook() {
 
 cmd_sync() {
   local project="$PWD"
-  while [ $# -gt 0 ]; do case "$1" in --project) project="$2"; shift 2;; *) shift;; esac; done
+  while [ $# -gt 0 ]; do case "$1" in --project) project="$2"; shift 2;; *) die "unknown flag: $1";; esac; done
   # shellcheck disable=SC1091
   . "$ENGINE_DIR/lib/config.sh"
   CLAUDE_PROJECT_DIR="$project" kb_load_config || die "no .kbconfig in $project"
