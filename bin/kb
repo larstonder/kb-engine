@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# bin/kb - scaffold and sync a KB content repo.
+set -uo pipefail
+ENGINE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+die() { echo "kb: $1" >&2; exit 1; }
+
+cmd_init() {
+  local dir="" preset="general" cats="" mode="standalone" branch="main" project="$PWD"
+  dir="$1"; shift || true
+  [ -n "$dir" ] || die "usage: kb init <dir> [--preset X] [--categories a,b] [--mode M] [--branch B] [--project P]"
+  while [ $# -gt 0 ]; do case "$1" in
+    --preset)     preset="$2";  shift 2;;
+    --categories) cats="$2";    shift 2;;
+    --mode)       mode="$2";    shift 2;;
+    --branch)     branch="$2";  shift 2;;
+    --project)    project="$2"; shift 2;;
+    *) die "unknown flag: $1";;
+  esac; done
+  local presetf="$ENGINE_DIR/presets/$preset.json"
+  [ -f "$presetf" ] || die "no such preset: $preset"
+  mkdir -p "$dir"
+  # kb.json from preset, optionally overriding category list.
+  if [ -n "$cats" ]; then
+    local arr; arr="$(printf '%s' "$cats" | jq -R 'split(",")|map({name:.,type:.})')"
+    jq --argjson c "$arr" '.categories=$c' "$presetf" > "$dir/kb.json"
+  else
+    cp "$presetf" "$dir/kb.json"
+  fi
+  # Category folders.
+  while IFS= read -r c; do mkdir -p "$dir/$c"; done < <(jq -r '.categories[].name' "$dir/kb.json")
+  # Content-template docs (do not clobber existing).
+  for fdoc in CONVENTIONS.md INDEX.md BACKLOG.md README.md .gitignore .gitattributes; do
+    [ -f "$dir/$fdoc" ] || cp "$ENGINE_DIR/content-template/$fdoc" "$dir/$fdoc"
+  done
+  vendor "$dir"
+  if [ "$mode" = "standalone" ] && [ ! -d "$dir/.git" ]; then
+    git -C "$dir" init -q
+    git -C "$dir" symbolic-ref HEAD "refs/heads/$branch" 2>/dev/null || true
+  fi
+  install_hook "$dir"
+  # Project .kbconfig (KB_DIR relative to project if possible).
+  local rel; rel="$(python3 - "$project" "$dir" 2>/dev/null <<'PY'
+import os, sys; print(os.path.relpath(sys.argv[2], sys.argv[1]))
+PY
+)"; [ -n "$rel" ] || rel="$dir"
+  printf 'KB_DIR="%s"\nMODE="%s"\nBRANCH="%s"\n' "$rel" "$mode" "$branch" > "$project/.kbconfig"
+  echo "kb: initialized $dir (preset=$preset, mode=$mode)"
+}
+
+vendor() {
+  local dir="$1"; mkdir -p "$dir/.kb/bin"
+  cp "$ENGINE_DIR"/lib/validate.sh "$ENGINE_DIR"/lib/check-*.sh "$ENGINE_DIR"/lib/template.sh "$dir/.kb/bin/"
+  chmod +x "$dir/.kb/bin/"*.sh
+}
+
+install_hook() {
+  local dir="$1"
+  [ -d "$dir/.git" ] || return 0
+  mkdir -p "$dir/.git/hooks"
+  cp "$ENGINE_DIR/lib/precommit.tmpl" "$dir/.git/hooks/pre-commit"
+  chmod +x "$dir/.git/hooks/pre-commit"
+}
+
+cmd_sync() {
+  local project="$PWD"
+  while [ $# -gt 0 ]; do case "$1" in --project) project="$2"; shift 2;; *) shift;; esac; done
+  # shellcheck disable=SC1091
+  . "$ENGINE_DIR/lib/config.sh"
+  CLAUDE_PROJECT_DIR="$project" kb_load_config || die "no .kbconfig in $project"
+  vendor "$KB_DIR_ABS"; install_hook "$KB_DIR_ABS"
+  while IFS= read -r c; do mkdir -p "$KB_DIR_ABS/$c"; done < <(jq -r '.categories[].name' "$KB_DIR_ABS/kb.json")
+  echo "kb: synced $KB_DIR_ABS"
+}
+
+case "${1:-}" in
+  init) shift; cmd_init "$@";;
+  sync) shift; cmd_sync "$@";;
+  *) die "usage: kb {init|sync} ...";;
+esac
