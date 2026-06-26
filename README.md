@@ -56,6 +56,36 @@ With the plugin installed, run the `/kb` slash command from inside the project y
 
 ---
 
+## How the content repo is stored
+
+**The content directory is always its own git repository.** This is a hard requirement, not just the default, because the Stop hook stages and pushes via `git -C <kb-dir>` (`git add -A` → commit → `push`). If `<kb-dir>` were a plain folder inside another repo, those commands would resolve to that **parent** repo and auto-commit/push your whole project. So:
+
+- **`standalone` (default)** — `kb init` runs `git init` on `<kb-dir>`, making it a self-contained repo. `init` does **not** add a remote.
+- **`submodule`** — `<kb-dir>` is a git submodule, i.e. still its own repo, mounted in the parent project.
+
+### Local-only (no remote)
+
+A standalone KB works with **no remote at all**. Commits are recorded locally each session; the Stop hook's push and the SessionStart fast-forward simply no-op (logged, exit 0). Add a remote whenever you want syncing:
+
+```sh
+git -C <kb-dir> remote add origin <url>
+git -C <kb-dir> push -u origin <branch>   # one-time; afterwards the hooks pull/push automatically
+```
+
+### Nesting it inside an existing project
+
+If `<kb-dir>` lives inside another git repo (e.g. `.knowledge/` in your app), the KB is a **nested repo**: the parent repo sees it as a single embedded entry (git won't recurse into it). The engine does **not** modify the parent's `.gitignore`, so add the KB dir there yourself to keep the parent clean:
+
+```sh
+echo '<kb-dir>/' >> .gitignore   # in the PARENT project
+```
+
+### Not supported: KB tracked inside your main project repo
+
+There is **no mode** where the KB is plain files committed to your application's own repo (one shared history). That would require the hooks to scope git to a subdirectory and forgo auto-push, which the engine deliberately doesn't do — the KB's per-session auto-commit/auto-push lifecycle is kept isolated from your app's history, branches, and PRs. Keep the KB as its own repo (standalone, remote optional).
+
+---
+
 ## Configuration
 
 Two config files are involved.
