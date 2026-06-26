@@ -10,6 +10,19 @@ LIB="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}/lib"
 . "$LIB/config.sh"; . "$LIB/gitops.sh"
 kb_load_config || exit 0
 
+# Drop-in notices. SessionStart runs once per session, so these are once-per-session.
+if ! command -v jq >/dev/null 2>&1; then
+  kb_notice "jq not found on PATH - the knowledge base is inactive this session; install jq, then run /kb doctor"
+else
+  _kbver="$(kb_kbjson_version)"
+  if [ "${_kbver:-1}" -gt "$KB_SCHEMA_VERSION" ] 2>/dev/null; then
+    kb_notice "kb.json is v$_kbver but this engine speaks v$KB_SCHEMA_VERSION; update the kb-engine plugin or some checks may not apply"
+  fi
+fi
+
+# inrepo: nothing to pull or fast-forward; never touch the parent repo.
+[ "$KB_MODE" = "inrepo" ] && exit 0
+
 ERR_LOG="$PROJ/.kb-push-errors.log"
 
 log_err() {

@@ -18,4 +18,21 @@ echo '{"version":1,"categories":[{"name":"glossary","type":"glossary"}],"checks"
 CLAUDE_PROJECT_DIR="$work" bash skills/knowledge-base/scripts/log-consult.sh glossary/x.md read t
 assert_file "$work/.usage.log"
 assert_contains "$(cat "$work/.usage.log")" "glossary/x.md" "usage log records consult"
+
+# kb-pull no-ops in inrepo (does not touch the main repo)
+irp="tests/.work/pull-inrepo"; rm -rf "$irp"; mkdir -p "$irp/knowledge/glossary"
+git -C "$irp" init -q
+git -C "$irp" -c user.email=t@e -c user.name=t commit -q --allow-empty -m base
+printf 'KB_DIR="knowledge"\nMODE="inrepo"\nAUTO_COMMIT="false"\nBRANCH="main"\n' > "$irp/.kbconfig"
+echo '{"version":1,"categories":[{"name":"glossary","type":"glossary"}],"checks":{}}' > "$irp/knowledge/kb.json"
+before="$(git -C "$irp" rev-parse HEAD)"
+echo '{}' | CLAUDE_PROJECT_DIR="$irp" bash hooks/kb-pull.sh; rc=$?
+assert_eq "0" "$rc" "kb-pull exits 0 in inrepo"
+assert_eq "$before" "$(git -C "$irp" rev-parse HEAD)" "kb-pull did not change the main repo"
+
+# version guard notice when kb.json version > engine
+echo '{"version":99,"categories":[{"name":"glossary","type":"glossary"}],"checks":{}}' > "$irp/knowledge/kb.json"
+out="$(echo '{}' | CLAUDE_PROJECT_DIR="$irp" bash hooks/kb-pull.sh 2>&1)"
+assert_contains "$out" "v99" "kb-pull warns on newer kb.json version"
+
 assert_summary
