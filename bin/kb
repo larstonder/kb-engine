@@ -86,8 +86,77 @@ cmd_sync() {
   echo "kb: synced $KB_DIR_ABS"
 }
 
+cmd_doctor() {
+  local project="$PWD"
+  while [ $# -gt 0 ]; do case "$1" in --project) project="$2"; shift 2;; *) shift;; esac; done
+  local fail=0
+  d_ok()   { printf 'ok   %s\n' "$1"; }
+  d_warn() { printf 'warn %s\n' "$1"; }
+  d_fail() { printf 'fail %s\n' "$1"; fail=1; }
+
+  command -v jq  >/dev/null 2>&1 && d_ok "jq present" || d_fail "jq not found on PATH (required)"
+  command -v git >/dev/null 2>&1 && d_ok "git present" || d_fail "git not found on PATH (required)"
+  if command -v ruby >/dev/null 2>&1 || { command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&1; }; then
+    d_ok "YAML parser present (strict frontmatter validation)"
+  else
+    d_warn "no ruby/python yaml parser; using portable fallback"
+  fi
+
+  # shellcheck disable=SC1091
+  . "$ENGINE_DIR/lib/config.sh"
+  if CLAUDE_PROJECT_DIR="$project" kb_load_config; then
+    d_ok ".kbconfig found (KB_DIR=$KB_DIR_ABS, MODE=$KB_MODE, AUTO_COMMIT=$KB_AUTO_COMMIT)"
+    [ -d "$KB_DIR_ABS" ] && d_ok "KB_DIR exists" || d_fail "KB_DIR does not exist: $KB_DIR_ABS"
+  else
+    d_fail "no .kbconfig in $project (run: kb init <dir>)"
+    [ "$fail" = 0 ] && return 0 || return 1
+  fi
+
+  if command -v jq >/dev/null 2>&1; then
+    if [ -f "$KB_DIR_ABS/kb.json" ] && jq -e . "$KB_DIR_ABS/kb.json" >/dev/null 2>&1; then
+      local v; v="$(kb_kbjson_version)"
+      if [ "$v" -le "$KB_SCHEMA_VERSION" ] 2>/dev/null; then d_ok "kb.json valid (version $v)"
+      else d_warn "kb.json version $v > engine $KB_SCHEMA_VERSION; update the plugin"; fi
+    else
+      d_fail "kb.json missing or invalid JSON"
+    fi
+  else
+    d_warn "kb.json not checked (jq missing)"
+  fi
+
+  local s missing=0
+  for s in validate.sh check-wikilinks.sh check-ghostlinks.sh check-graph.sh template.sh; do
+    [ -x "$KB_DIR_ABS/.kb/bin/$s" ] || { d_fail "vendored validator missing/not executable: .kb/bin/$s"; missing=1; }
+  done
+  [ "$missing" = 0 ] && d_ok "vendored validators present (.kb/bin/)"
+
+  case "$KB_MODE" in
+    inrepo)
+      git -C "$KB_DIR_ABS" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+        && d_ok "KB_DIR is inside a git repo (inrepo)" \
+        || d_fail "inrepo: KB_DIR is not inside a git repo"
+      d_warn "inrepo: no pre-commit installed; validation runs at Stop"
+      ;;
+    *)
+      git -C "$KB_DIR_ABS" rev-parse --git-dir >/dev/null 2>&1 \
+        && d_ok "KB_DIR is a git repo" || d_fail "KB_DIR is not a git repo"
+      [ -x "$KB_DIR_ABS/.git/hooks/pre-commit" ] \
+        && d_ok "pre-commit hook installed" || d_warn "pre-commit not installed (run: kb sync)"
+      if git -C "$KB_DIR_ABS" remote get-url origin >/dev/null 2>&1; then
+        git -C "$KB_DIR_ABS" ls-remote --exit-code origin >/dev/null 2>&1 \
+          && d_ok "remote reachable" || d_warn "remote configured but unreachable (offline?)"
+      else
+        d_warn "no remote configured (local-only)"
+      fi
+      ;;
+  esac
+
+  [ "$fail" = 0 ] && { printf 'kb doctor: OK\n'; return 0; } || { printf 'kb doctor: problems found\n'; return 1; }
+}
+
 case "${1:-}" in
   init) shift; cmd_init "$@";;
   sync) shift; cmd_sync "$@";;
-  *) die "usage: kb {init|sync} ...";;
+  doctor) shift; cmd_doctor "$@";;
+  *) die "usage: kb {init|sync|doctor} ...";;
 esac
