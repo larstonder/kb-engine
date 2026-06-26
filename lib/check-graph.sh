@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # lib/check-graph.sh - reject entries orphaned from their repo node (repos hub).
 set -uo pipefail
-if [ "${1:-}" = "--root" ]; then shift 2; fi
+ROOT=""; if [ "${1:-}" = "--root" ]; then ROOT="$2"; shift 2; fi
+[ -n "$ROOT" ] || ROOT="$PWD"
+
+CATS="$(jq -r '.categories[].name' "$ROOT/kb.json" 2>/dev/null | paste -sd'|' -)"
+[ -n "$CATS" ] || exit 0
+
+REPO_CAT="$(jq -r '.categories[] | select(.type=="repo") | .name' "$ROOT/kb.json" 2>/dev/null | head -1)"
 
 EXIT=0
 
@@ -11,14 +17,23 @@ fail() {
 }
 
 for f in "$@"; do
-  # Only validate entries inside a category folder, and never repo entries
-  # themselves (they would have to link to their own node).
-  case "$f" in
-    repos/*.md|*/repos/*.md) continue ;;
-    glossary/*.md|conventions/*.md|decisions/*.md|recipes/*.md|gotchas/*.md) ;;
-    */glossary/*.md|*/conventions/*.md|*/decisions/*.md|*/recipes/*.md|*/gotchas/*.md) ;;
-    *) continue ;;
-  esac
+  # Only validate entries inside a configured category folder.
+  matched=0
+  case "$f" in *.md) ;; *) continue ;; esac
+  IFS='|' read -ra CAT_NAMES <<< "$CATS"
+  for cat in "${CAT_NAMES[@]}"; do
+    case "$f" in
+      "${cat}/"*.md|*"/${cat}/"*.md) matched=1; break ;;
+    esac
+  done
+  [ "$matched" -eq 1 ] || continue
+
+  # Exempt entries inside the repo-type category.
+  if [ -n "$REPO_CAT" ]; then
+    case "$f" in
+      "${REPO_CAT}/"*.md|*"/${REPO_CAT}/"*.md) continue ;;
+    esac
+  fi
 
   [ -f "$f" ] || continue
 

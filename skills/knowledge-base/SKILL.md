@@ -106,16 +106,16 @@ Fill in:
 - `verified_at`: leave blank (populated only on promotion).
 - `repos`: list of submodule names this applies to. Empty if cross-cutting.
 - `aliases`: every synonym / translation / abbreviation a future search might use. Be generous: this is the lookup engine.
-- `tags`: hierarchical (`#area/X`, `#repo/Y`, `#lang/Z`, `#status/W`). **Always quote each tag**: `tags: ["#area/X", "#status/active"]`. A bare `#` in a YAML flow array starts a comment that breaks the array and shows up as Obsidian's red "invalid properties" banner; `validate-frontmatter.sh` rejects it at commit time.
+- `tags`: hierarchical (`#area/X`, `#repo/Y`, `#lang/Z`, `#status/W`). **Always quote each tag**: `tags: ["#area/X", "#status/active"]`. A bare `#` in a YAML flow array starts a comment that breaks the array and shows up as Obsidian's red "invalid properties" banner; `validate.sh` rejects it at commit time.
 - `sources`: file:line, PR#, commit SHA, or spec references. Empty array allowed but discouraged.
-- **Connect it to the graph.** An entry with no `[[wikilink]]` is a graph orphan (`repos:` and `#repo/...` tags are metadata only - Obsidian draws edges from wikilinks, not frontmatter). If `repos:` is non-empty, the body MUST contain a `[[<repo>]]` wikilink to at least one listed repo. Cross-cutting entries (`repos: []`) link the related concept entries they belong with instead. `check-graph-connectivity.sh` enforces this at commit time, so an unconnected entry will block the auto-commit.
+- **Connect it to the graph.** An entry with no `[[wikilink]]` is a graph orphan (`repos:` and `#repo/...` tags are metadata only - Obsidian draws edges from wikilinks, not frontmatter). If `repos:` is non-empty, the body MUST contain a `[[<repo>]]` wikilink to at least one listed repo. Cross-cutting entries (`repos: []`) link the related concept entries they belong with instead. `check-graph.sh` enforces this at commit time via the content repo's generated git pre-commit hook, so an unconnected entry will block the auto-commit.
 
 ### 6. Log the consult
 
-After writing, append one line to `$KB_DIR/.usage.log` via:
+After writing, append one line to `$KB_DIR/.usage.log`. Consult logging for reads is automatic via the PostToolUse(Read) hook; for writes you invoke the vendored script directly:
 
 ```bash
-bash skills/knowledge-base/scripts/log-consult.sh <relative-path> write <task-slug>
+bash "$KB_DIR/.kb/bin/log-consult.sh" <relative-path> write <task-slug>
 ```
 
 The `<task-slug>` is a short identifier for the current session's task (e.g. the feature branch name or a few keywords from the user prompt). Pass it explicitly; the script falls back to `$KB_TASK` env var or `unknown` if omitted.
@@ -171,8 +171,8 @@ Append via `scripts/log-consult.sh`. `result=read` is appended **automatically**
 
 - Filename: `kebab-case.md`.
 - Date format: `DD.MM.YYYY`.
-- Internal references: `[[wikilinks]]` only. Never markdown-style internal links between KB entries (rejected by lefthook).
+- Internal references: `[[wikilinks]]` only. Never markdown-style internal links between KB entries (rejected by the content repo's generated git pre-commit hook).
 - Ghost-link discipline: never put an agent-paraphrased gloss next to a `[[link]]` whose target does not exist. Bare link, or real stub with a citation.
-- Graph connectivity: no orphans. If `repos:` is non-empty, the entry must `[[link]]` at least one listed repo; `repos: []` entries link their related concept notes. `repos/*.md` exempt. Enforced by `check-graph-connectivity.sh`.
+- Graph connectivity: no orphans. If `repos:` is non-empty, the entry must `[[link]]` at least one listed repo; `repos: []` entries link their related concept notes. The repo-type category entries are exempt. Enforced by `check-graph.sh`.
 - Atomic notes: one concept per file. Past ~150 lines, split.
 - Override: this KB auto-commits and auto-pushes on session end via the engine's Stop hook. That is the delivery mechanism the user opted into.

@@ -2,7 +2,7 @@
 set -uo pipefail
 ENGINE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT="$PWD"
-while [ $# -gt 0 ]; do case "$1" in --project) PROJECT="$2"; shift 2;; *) shift;; esac; done
+while [ $# -gt 0 ]; do case "$1" in --project) PROJECT="${2:?--project needs a value}"; shift 2;; *) shift;; esac; done
 
 DEST="$PROJECT/.claude/kb-engine"
 mkdir -p "$DEST"
