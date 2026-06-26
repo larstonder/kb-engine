@@ -6,6 +6,15 @@ kb_git() { git -C "$KB_DIR_ABS" "$@"; }
 
 kb_git_dirty() { kb_git status --porcelain 2>/dev/null; }
 
+# Stage THEN commit ONLY the given KB-relative paths, run from the KB dir.
+# Staging is required because new entries are untracked; the pathspec commit then
+# records ONLY these paths, so the user's other staged changes are never included.
+kb_git_commit_scoped() {
+  local msg="$1"; shift
+  kb_git add -- "$@" || return 1
+  kb_git commit -m "$msg" -- "$@"
+}
+
 kb_git_ahead() {
   kb_git rev-list --count "origin/$KB_BRANCH..HEAD" 2>/dev/null || echo 0
 }
@@ -27,9 +36,9 @@ kb_git_pull_ff() {
 }
 
 kb_git_push() {
-  if [ "$KB_MODE" = "submodule" ]; then
-    kb_git push origin "HEAD:$KB_BRANCH"
-  else
-    kb_git push origin "$KB_BRANCH"
-  fi
+  case "$KB_MODE" in
+    inrepo)    return 0 ;;
+    submodule) kb_git push origin "HEAD:$KB_BRANCH" ;;
+    *)         kb_git push origin "$KB_BRANCH" ;;
+  esac
 }
