@@ -1,5 +1,5 @@
 {
-  "name": "kb-engine-local",
+  "name": "kb-engine",
   "owner": { "name": "Lars Tønder" },
   "plugins": [
     { "name": "knowledge-base", "source": "./", "description": "KB engine for code teams." }
