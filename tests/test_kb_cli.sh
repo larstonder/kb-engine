@@ -18,5 +18,7 @@ git add gotchas/bad.md
 git commit -m "x" >/dev/null 2>&1; rc=$?
 cd "$ENGINE"
 assert_eq "1" "$rc" "pre-commit blocks invalid entry"
+errlog_ignored="$(git -C "$work/.knowledge" check-ignore .kb-push-errors.log >/dev/null 2>&1 && echo yes || echo no)"
+assert_eq "yes" "$errlog_ignored" "kb error log is gitignored in the content repo"
 assert_exit 1 bash bin/kb init "$work/.bad" --preset general --mode bogus --project "$work/.badproj"
 assert_summary

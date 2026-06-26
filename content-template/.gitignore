@@ -3,3 +3,5 @@
 .obsidian/cache
 .obsidian/graph.json
 .DS_Store
+.kb-push-errors.log
+.kb-push-errors.log.tmp
