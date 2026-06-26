@@ -6,23 +6,31 @@ ENGINE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 die() { echo "kb: $1" >&2; exit 1; }
 
 cmd_init() {
-  local dir="" preset="general" cats="" mode="standalone" branch="main" project="$PWD"
+  local dir="" preset="general" cats="" mode="standalone" branch="main" project="$PWD" autocommit="" force=""
   dir="$1"; shift || true
   [ -n "$dir" ] || die "usage: kb init <dir> [--preset X] [--categories a,b] [--mode M] [--branch B] [--project P]"
   while [ $# -gt 0 ]; do case "$1" in
     --preset)     preset="$2";  shift 2;;
     --categories) cats="$2";    shift 2;;
-    --mode)       mode="$2";    shift 2;;
-    --branch)     branch="$2";  shift 2;;
-    --project)    project="$2"; shift 2;;
+    --mode)         mode="$2";    shift 2;;
+    --branch)       branch="$2";  shift 2;;
+    --project)      project="$2"; shift 2;;
+    --auto-commit)    autocommit="true";  shift;;
+    --no-auto-commit) autocommit="false"; shift;;
+    --force)          force="1";          shift;;
     *) die "unknown flag: $1";;
   esac; done
-  case "$mode" in standalone|submodule) ;; *) die "mode must be standalone or submodule";; esac
+  case "$mode" in standalone|submodule|inrepo) ;; *) die "mode must be standalone, submodule, or inrepo";; esac
+  if [ -z "$autocommit" ]; then
+    if [ "$mode" = "inrepo" ]; then autocommit="false"; else autocommit="true"; fi
+  fi
   local presetf="$ENGINE_DIR/presets/$preset.json"
   [ -f "$presetf" ] || die "no such preset: $preset"
   mkdir -p "$dir"
   # kb.json from preset, optionally overriding category list.
-  if [ -n "$cats" ]; then
+  if [ -f "$dir/kb.json" ] && [ -z "$force" ]; then
+    echo "kb: kb.json already exists; leaving it (use --force to overwrite)"
+  elif [ -n "$cats" ]; then
     local arr; arr="$(printf '%s' "$cats" | jq -R 'split(",")|map({name:.,type:.})')"
     jq --argjson c "$arr" '.categories=$c' "$presetf" > "$dir/kb.json"
   else
@@ -45,8 +53,12 @@ cmd_init() {
 import os, sys; print(os.path.relpath(sys.argv[2], sys.argv[1]))
 PY
 )"; [ -n "$rel" ] || rel="$dir"
-  printf 'KB_DIR="%s"\nMODE="%s"\nBRANCH="%s"\n' "$rel" "$mode" "$branch" > "$project/.kbconfig"
+  printf 'KB_DIR="%s"\nMODE="%s"\nAUTO_COMMIT="%s"\nBRANCH="%s"\n' "$rel" "$mode" "$autocommit" "$branch" > "$project/.kbconfig"
   echo "kb: initialized $dir (preset=$preset, mode=$mode)"
+  if [ "$mode" = "inrepo" ]; then
+    echo "kb: inrepo mode - the KB is tracked by your main repo (do not gitignore it)."
+    echo "    To validate your own commits, call $dir/.kb/bin/validate.sh from your project's pre-commit."
+  fi
 }
 
 vendor() {

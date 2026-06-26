@@ -21,4 +21,30 @@ assert_eq "1" "$rc" "pre-commit blocks invalid entry"
 errlog_ignored="$(git -C "$work/.knowledge" check-ignore .kb-push-errors.log >/dev/null 2>&1 && echo yes || echo no)"
 assert_eq "yes" "$errlog_ignored" "kb error log is gitignored in the content repo"
 assert_exit 1 bash bin/kb init "$work/.bad" --preset general --mode bogus --project "$work/.badproj"
+
+# inrepo init: no git init in the dir, no pre-commit, .kbconfig has inrepo + AUTO_COMMIT=false
+ir="tests/.work/inrepo"; rm -rf "$ir"; mkdir -p "$ir"; git -C "$ir" init -q
+bash bin/kb init "$ir/knowledge" --preset general --mode inrepo --project "$ir"
+[ ! -e "$ir/knowledge/.git" ] && echo "ok: inrepo dir has no own .git" || echo "FAIL: inrepo dir got its own .git"
+assert_eq "no" "$([ -e "$ir/knowledge/.git/hooks/pre-commit" ] && echo yes || echo no)" "inrepo installs no pre-commit"
+assert_contains "$(cat "$ir/.kbconfig")" 'MODE="inrepo"' ".kbconfig mode inrepo"
+assert_contains "$(cat "$ir/.kbconfig")" 'AUTO_COMMIT="false"' "inrepo AUTO_COMMIT defaults false"
+
+# --auto-commit override
+ir2="tests/.work/inrepo2"; rm -rf "$ir2"; mkdir -p "$ir2"; git -C "$ir2" init -q
+bash bin/kb init "$ir2/knowledge" --mode inrepo --auto-commit --project "$ir2"
+assert_contains "$(cat "$ir2/.kbconfig")" 'AUTO_COMMIT="true"' "--auto-commit flips to true"
+
+# standalone .kbconfig gets AUTO_COMMIT=true line
+sa="tests/.work/sa"; rm -rf "$sa"; mkdir -p "$sa"
+bash bin/kb init "$sa/.knowledge" --preset general --project "$sa"
+assert_contains "$(cat "$sa/.kbconfig")" 'AUTO_COMMIT="true"' "standalone AUTO_COMMIT=true"
+
+# re-run safety: a hand-edited kb.json survives a second init; --force resets it
+printf '{"version":1,"categories":[{"name":"custom","type":"custom"}],"checks":{}}' > "$sa/.knowledge/kb.json"
+bash bin/kb init "$sa/.knowledge" --preset general --project "$sa"
+assert_contains "$(cat "$sa/.knowledge/kb.json")" '"custom"' "re-run preserves existing kb.json"
+bash bin/kb init "$sa/.knowledge" --preset general --force --project "$sa"
+assert_eq "" "$(grep -o custom "$sa/.knowledge/kb.json" || true)" "--force resets kb.json to preset"
+
 assert_summary
