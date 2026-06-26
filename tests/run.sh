@@ -9,7 +9,13 @@ for t in tests/test_*.sh; do
 done
 if command -v shellcheck >/dev/null 2>&1; then
   printf '\n=== shellcheck ===\n'
-  shellcheck -S warning lib/*.sh hooks/*.sh bin/kb install.sh skills/knowledge-base/scripts/*.sh || rc=1
+  shopt -s nullglob
+  targets=(lib/*.sh hooks/*.sh skills/knowledge-base/scripts/*.sh)
+  for extra in bin/kb install.sh; do [ -f "$extra" ] && targets+=("$extra"); done
+  shopt -u nullglob
+  if [ ${#targets[@]} -gt 0 ]; then
+    shellcheck -S warning "${targets[@]}" || rc=1
+  fi
 else
   printf '\n(shellcheck not installed; skipping lint)\n'
 fi
