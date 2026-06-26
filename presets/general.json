@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "categories": [
+    { "name": "glossary",    "type": "glossary" },
+    { "name": "conventions", "type": "convention" },
+    { "name": "decisions",   "type": "decision",
+      "extraFields": [{ "name": "status", "allowed": ["active", "superseded"] }] },
+    { "name": "recipes",     "type": "recipe" },
+    { "name": "gotchas",     "type": "gotcha",
+      "extraFields": [{ "name": "severity", "allowed": ["low", "medium", "high"] }] }
+  ],
+  "checks": { "frontmatter": true, "wikilinks": false, "ghostLinks": false, "graphConnectivity": false },
+  "staleMonths": 3
+}

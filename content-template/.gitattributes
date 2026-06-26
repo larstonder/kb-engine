@@ -1,0 +1,5 @@
+# .usage.log is an append-only consult log written every session and shared
+# across machines. The built-in `union` merge driver concatenates both sides on
+# conflict instead of failing, which is exactly right for an append-only log:
+# parallel sessions/machines never produce a rebase conflict on the tail.
+.usage.log merge=union

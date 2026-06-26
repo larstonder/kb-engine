@@ -1,0 +1,5 @@
+.backlog-surfaced
+.obsidian/workspace*
+.obsidian/cache
+.obsidian/graph.json
+.DS_Store
