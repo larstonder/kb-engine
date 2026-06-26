@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# install.sh - install the KB engine into a project without the plugin system.
 set -uo pipefail
 ENGINE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT="$PWD"
