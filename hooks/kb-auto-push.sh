@@ -160,7 +160,6 @@ fi
 # Failure is non-fatal: offline OR empty-remote bootstrap both mean "can't rebase yet".
 kb_git_fetch 2>/dev/null || true
 
-# Only rebase when the remote branch exists AND we are behind.
 BEHIND=0
 if kb_git rev-parse --verify -q "origin/$KB_BRANCH" >/dev/null 2>&1; then
   BEHIND=$(kb_git rev-list --count "HEAD..origin/$KB_BRANCH" 2>/dev/null || echo 0)
