@@ -1,0 +1,6 @@
+{
+  "name": "knowledge-base",
+  "version": "0.1.0",
+  "description": "Claude-maintained, self-syncing knowledge base engine for code teams.",
+  "author": { "name": "Lars Tønder" }
+}

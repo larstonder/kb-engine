@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "matcher": "", "hooks": [
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/kb-pull.sh" },
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/kb-stale-sweep.sh" }
+      ] }
+    ],
+    "Stop": [
+      { "matcher": "", "hooks": [
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/kb-capture-checkpoint.sh" },
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/kb-auto-push.sh" }
+      ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Read", "hooks": [
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/kb-log-read.sh" }
+      ] }
+    ]
+  }
+}
