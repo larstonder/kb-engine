@@ -157,13 +157,14 @@ if [ -n "$STATUS" ]; then
 fi
 
 # Fetch before deciding whether a rebase is even needed.
-if ! kb_git_fetch 2>/dev/null; then
-  log_err "fetch failed (offline?); commit left local for next session"
-  exit 0
-fi
+# Failure is non-fatal: offline OR empty-remote bootstrap both mean "can't rebase yet".
+kb_git_fetch 2>/dev/null || true
 
-# Only rebase when origin actually advanced.
-BEHIND=$(kb_git rev-list --count "HEAD..origin/$KB_BRANCH" 2>/dev/null || echo 0)
+# Only rebase when the remote branch exists AND we are behind.
+BEHIND=0
+if kb_git rev-parse --verify -q "origin/$KB_BRANCH" >/dev/null 2>&1; then
+  BEHIND=$(kb_git rev-list --count "HEAD..origin/$KB_BRANCH" 2>/dev/null || echo 0)
+fi
 if [ "$BEHIND" != "0" ]; then
   # Stash the working-tree residue so the rebase has a clean tree.
   STASHED=0
@@ -184,7 +185,7 @@ if [ "$BEHIND" != "0" ]; then
 fi
 
 if ! kb_git_push 2>>"$ERR_LOG"; then
-  log_err "push failed"
+  log_err "push failed (offline?); commit left local for next session"
   echo "[KB] auto-push: push failed. See $ERR_LOG. Will retry next session." >&2
   exit 0
 fi
