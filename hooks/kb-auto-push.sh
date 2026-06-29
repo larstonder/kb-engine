@@ -94,9 +94,57 @@ if [ -f "$ERR_LOG" ] && [ "$(wc -c <"$ERR_LOG" 2>/dev/null || echo 0)" -gt 26214
   tail -n 200 "$ERR_LOG" > "$ERR_LOG.tmp" 2>/dev/null && mv "$ERR_LOG.tmp" "$ERR_LOG"
 fi
 
-# Precondition: KB dir must be a git repo.
-if [ ! -d "$KB_DIR_ABS/.git" ] && [ ! -f "$KB_DIR_ABS/.git" ]; then
+# Precondition: KB dir must be a git repo (standalone/submodule), or part of one (inrepo).
+if [ "$KB_MODE" != "inrepo" ] && [ ! -d "$KB_DIR_ABS/.git" ] && [ ! -f "$KB_DIR_ABS/.git" ]; then
   exit 0
+fi
+if [ "$KB_MODE" = "inrepo" ] && ! git -C "$KB_DIR_ABS" rev-parse --git-dir >/dev/null 2>&1; then
+  exit 0
+fi
+
+# --- AUTO_COMMIT=false: validate only, never stage/commit/push (any mode) ---
+if [ "$KB_AUTO_COMMIT" = "false" ]; then
+  PREFIX=$(kb_git rev-parse --show-prefix 2>/dev/null)
+  ENTRIES=$(kb_git status --porcelain -u -- . 2>/dev/null | awk '{print $2}' \
+            | sed "s|^${PREFIX}||" \
+            | grep -E "(^|/)($(kb_categories_alt))/.*\.md$" || true)
+  if [ -n "$ENTRIES" ]; then
+    VALIDATION=$(validate_staged "$ENTRIES")
+    [ -n "$VALIDATION" ] && QUARANTINED=1
+  fi
+  end_prompts_and_exit
+fi
+
+# --- AUTO_COMMIT=true + inrepo: scoped commit, no push ---
+if [ "$KB_MODE" = "inrepo" ]; then
+  for marker in rebase-merge rebase-apply MERGE_HEAD; do
+    if [ -e "$(kb_git rev-parse --git-path "$marker" 2>/dev/null)" ]; then
+      log_err "inrepo: skipped (repo mid-operation: $marker)"; end_prompts_and_exit
+    fi
+  done
+  PREFIX=$(kb_git rev-parse --show-prefix 2>/dev/null)
+  # All changed paths under the KB dir; -u expands untracked dirs to individual files.
+  ALL=$(kb_git status --porcelain -u -- . 2>/dev/null | awk '{print $2}' \
+        | sed "s|^${PREFIX}||" | sed '/^$/d')
+  [ -z "$ALL" ] && end_prompts_and_exit
+  ENTRIES=$(printf '%s\n' "$ALL" | grep -E "(^|/)($(kb_categories_alt))/.*\.md$" || true)
+  BAD=""
+  if [ -n "$ENTRIES" ]; then
+    VALIDATION=$(validate_staged "$ENTRIES")
+    if [ -n "$VALIDATION" ]; then
+      QUARANTINED=1
+      # FAIL lines carry ABSOLUTE paths; strip "$KB_DIR_ABS/" back to KB-relative.
+      BAD=$(printf '%s\n' "$VALIDATION" | sed -nE 's/^FAIL: ([^:]+):.*/\1/p' \
+            | sed "s|^${KB_DIR_ABS}/||" | sort -u)
+    fi
+  fi
+  GOOD=$(comm -23 <(printf '%s\n' "$ALL" | sort -u) <(printf '%s\n' "$BAD" | sed '/^$/d' | sort -u))
+  if [ -n "$GOOD" ]; then
+    # shellcheck disable=SC2046  # intentional word-split: path list must expand to separate args
+    kb_git_commit_scoped "Update KB" $(printf '%s\n' "$GOOD" | sed '/^$/d') 2>>"$ERR_LOG" \
+      || log_err "inrepo scoped commit failed"
+  fi
+  end_prompts_and_exit
 fi
 
 # Detect work: uncommitted changes in the working tree, and/or stranded commits.
