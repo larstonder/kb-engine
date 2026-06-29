@@ -109,7 +109,7 @@ cmd_doctor() {
     [ -d "$KB_DIR_ABS" ] && d_ok "KB_DIR exists" || d_fail "KB_DIR does not exist: $KB_DIR_ABS"
   else
     d_fail "no .kbconfig in $project (run: kb init <dir>)"
-    [ "$fail" = 0 ] && return 0 || return 1
+    return 1
   fi
 
   if command -v jq >/dev/null 2>&1; then

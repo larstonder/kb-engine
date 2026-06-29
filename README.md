@@ -20,7 +20,7 @@ The engine ships two parts that stay separate:
 
 This registers the engine as a plugin: it wires the five lifecycle hooks automatically (via `hooks/hooks.json`, resolved through `${CLAUDE_PLUGIN_ROOT}`) and adds the `/kb` slash command used to scaffold content (below).
 
-To develop against a local checkout instead, point the marketplace at the directory: `/plugin marketplace add ~/path/to/kb-engine`. (Prefer the GitHub source for normal use — a local directory source copies untracked files into the plugin cache.)
+To develop against a local checkout instead, point the marketplace at the directory: `/plugin marketplace add ~/path/to/kb-engine`. (Prefer the GitHub source for normal use: a local directory source copies untracked files into the plugin cache.)
 
 ### Option B: install.sh (non-plugin fallback)
 
@@ -37,7 +37,7 @@ This copies `hooks/`, `lib/`, and `skills/knowledge-base/` under `<project-dir>/
 With the plugin installed, run the `/kb` slash command from inside the project you want a KB for:
 
 ```
-/kb init <kb-dir> --preset general|monorepo [--mode standalone|submodule|inrepo] [--branch <branch>]
+/kb init <kb-dir> --preset general|monorepo [--mode standalone|submodule|inrepo] [--branch <branch>] [--auto-commit|--no-auto-commit]
 /kb sync
 /kb doctor
 ```
@@ -107,7 +107,7 @@ Written by `kb init`. Read by every hook and `kb sync` at runtime.
 ```sh
 KB_DIR=".knowledge"   # relative (or absolute) path from project root to the content repo
 MODE="standalone"     # standalone | submodule | inrepo
-AUTO_COMMIT="true"    # true | false  (see below)
+AUTO_COMMIT="true"    # true | false; default true for standalone/submodule, false for inrepo
 BRANCH="main"
 ```
 

@@ -161,7 +161,7 @@ if [ "$KB_MODE" = "inrepo" ]; then
   _COMMIT_F=$(mktemp); _VALIDATE_F=$(mktemp)
   kb_git status --porcelain -u -- . 2>/dev/null \
     | _parse_porcelain_paths "$PREFIX" "(^|/)($(kb_categories_alt))/.*\\.md\$" "$_COMMIT_F" "$_VALIDATE_F"
-  ALL=$(cat "$_COMMIT_F" | sed '/^$/d')
+  ALL=$(sed '/^$/d' "$_COMMIT_F")
   ENTRIES=$(cat "$_VALIDATE_F")
   rm -f "$_COMMIT_F" "$_VALIDATE_F"
   [ -z "$ALL" ] && end_prompts_and_exit
@@ -177,9 +177,8 @@ if [ "$KB_MODE" = "inrepo" ]; then
   fi
   GOOD=$(comm -23 <(printf '%s\n' "$ALL" | sort -u) <(printf '%s\n' "$BAD" | sed '/^$/d' | sort -u))
   if [ -n "$GOOD" ]; then
-    # Stage each path individually: existing files are added normally; paths already
-    # staged by the user (rename-old-sides from git mv) will fail `add` because the
-    # file is gone, but the rename is already in the index so the commit still works.
+    # Stage each path individually so the commit records each path's state
+    # (adds/modifications/deletions/renames). The || true is defensive only.
     printf '%s\n' "$GOOD" | sed '/^$/d' | while IFS= read -r p; do
       kb_git add -- "$p" 2>>"$ERR_LOG" || true
     done
