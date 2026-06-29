@@ -124,11 +124,10 @@ _parse_porcelain_paths() {
       printf '%s\n' "$new_path" >> "$commit_f"
       printf '%s' "$new_path" | grep -qE "$entry_re" && printf '%s\n' "$new_path" >> "$validate_f" || true
     elif printf '%s' "$st" | grep -q 'D'; then
-      # Deletion: path is gone — commit it but never validate (file does not exist).
+      # never validate a deleted file
       local del_path="${pathpart#"$prefix"}"
       printf '%s\n' "$del_path" >> "$commit_f"
     else
-      # Added, modified, untracked (??).
       local chg_path="${pathpart#"$prefix"}"
       printf '%s\n' "$chg_path" >> "$commit_f"
       printf '%s' "$chg_path" | grep -qE "$entry_re" && printf '%s\n' "$chg_path" >> "$validate_f" || true
@@ -159,8 +158,6 @@ if [ "$KB_MODE" = "inrepo" ]; then
     fi
   done
   PREFIX=$(kb_git rev-parse --show-prefix 2>/dev/null)
-  # All changed paths under the KB dir; -u expands untracked dirs to individual files.
-  # Deletions and rename-old sides go to the commit set but never the validate set.
   _COMMIT_F=$(mktemp); _VALIDATE_F=$(mktemp)
   kb_git status --porcelain -u -- . 2>/dev/null \
     | _parse_porcelain_paths "$PREFIX" "(^|/)($(kb_categories_alt))/.*\\.md\$" "$_COMMIT_F" "$_VALIDATE_F"
