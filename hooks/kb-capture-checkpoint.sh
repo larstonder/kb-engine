@@ -32,7 +32,7 @@ if [ -n "$CHANGES" ]; then
 fi
 
 cat >&2 <<'MSG'
-KB capture checkpoint: before ending, self-check — did you learn a durable gotcha,
+KB capture checkpoint: before ending, self-check - did you learn a durable gotcha,
 convention, decision, glossary term, or recipe this session that a future session
 would want? If yes, capture it now via the knowledge-base skill (announce-don't-ask;
 do not ask permission). If nothing qualifies, just stop.

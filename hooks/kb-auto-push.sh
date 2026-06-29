@@ -116,7 +116,7 @@ _parse_porcelain_paths() {
     st="${line:0:2}"
     pathpart="${line:3}"
     if printf '%s' "$st" | grep -qE '[RC]'; then
-      # Rename/copy: "XY old -> new" — old side is gone, new side is the result.
+      # Rename/copy: "XY old -> new" - old side is gone, new side is the result.
       local old_path new_path
       old_path="${pathpart%% -> *}"; old_path="${old_path#"$prefix"}"
       new_path="${pathpart#* -> }";  new_path="${new_path#"$prefix"}"
