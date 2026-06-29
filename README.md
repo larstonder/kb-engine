@@ -214,3 +214,9 @@ skills/knowledge-base/        # SKILL.md + scripts/log-consult.sh
 install.sh                    # non-plugin install path
 tests/                        # test_*.sh + run.sh
 ```
+
+---
+
+## License
+
+MIT - see [LICENSE](LICENSE). Copyright (c) 2026 Lars Tønder.
