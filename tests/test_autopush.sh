@@ -64,4 +64,39 @@ echo '{}' | CLAUDE_PROJECT_DIR="$n" bash hooks/kb-auto-push.sh >/dev/null 2>&1
 assert_eq "$head_before" "$(git -C "$n" rev-parse HEAD)" "AUTO_COMMIT=false makes no commit"
 assert_contains "$(git -C "$n" status --porcelain -u)" "g.md" "AUTO_COMMIT=false leaves the entry uncommitted"
 
+# --- inrepo deletion: deleting a KB entry commits the deletion, no quarantine ---
+d="tests/.work/ap-deletion"; rm -rf "$d"; mkdir -p "$d"
+bash bin/kb init "$d/knowledge" --preset general --mode inrepo --auto-commit --project "$d"
+git -C "$d" init -q 2>/dev/null || true
+# Add a valid entry and base-commit it so it exists in HEAD.
+printf -- '---\ntype: gotcha\ntitle: ToDelete\nconfidence: observed\ncreated: 01.01.2026\nupdated: 01.01.2026\nseverity: high\n---\nB\n' > "$d/knowledge/gotchas/todelete.md"
+git -C "$d" -c user.email=t@e -c user.name=t add -A
+git -C "$d" -c user.email=t@e -c user.name=t commit -q -m base
+# Delete the entry from the working tree.
+rm "$d/knowledge/gotchas/todelete.md"
+hook_output=$(GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@e GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@e \
+  bash -c 'echo "{}" | CLAUDE_PROJECT_DIR="'"$d"'" bash hooks/kb-auto-push.sh' 2>&1 || true)
+# The deletion must appear in HEAD (file gone from tree).
+tree_after=$(git -C "$d" ls-tree -r HEAD --name-only 2>/dev/null)
+assert_eq "" "$(printf '%s' "$tree_after" | grep 'todelete.md' || true)" "inrepo deletion: file absent from HEAD after hook"
+# Hook must NOT have exited with a quarantine message about the deleted file.
+assert_eq "" "$(printf '%s' "$hook_output" | grep 'FAILED validation' | grep 'todelete' || true)" "inrepo deletion: not falsely quarantined"
+
+# --- inrepo rename: git mv commits both sides (old gone, new present) ---
+r="tests/.work/ap-rename"; rm -rf "$r"; mkdir -p "$r"
+bash bin/kb init "$r/knowledge" --preset general --mode inrepo --auto-commit --project "$r"
+git -C "$r" init -q 2>/dev/null || true
+printf -- '---\ntype: gotcha\ntitle: OldName\nconfidence: observed\ncreated: 01.01.2026\nupdated: 01.01.2026\nseverity: high\n---\nB\n' > "$r/knowledge/gotchas/old-name.md"
+git -C "$r" -c user.email=t@e -c user.name=t add -A
+git -C "$r" -c user.email=t@e -c user.name=t commit -q -m base
+# Rename: old-name.md -> new-name.md (valid frontmatter with updated title).
+git -C "$r" mv knowledge/gotchas/old-name.md knowledge/gotchas/new-name.md
+sed -i '' 's/OldName/NewName/' "$r/knowledge/gotchas/new-name.md" 2>/dev/null || \
+  sed -i 's/OldName/NewName/' "$r/knowledge/gotchas/new-name.md"
+GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@e GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@e \
+  bash -c 'echo "{}" | CLAUDE_PROJECT_DIR="'"$r"'" bash hooks/kb-auto-push.sh' >/dev/null 2>&1 || true
+tree_after=$(git -C "$r" ls-tree -r HEAD --name-only 2>/dev/null)
+assert_eq "" "$(printf '%s' "$tree_after" | grep 'old-name.md' || true)" "inrepo rename: old path absent from HEAD"
+assert_contains "$tree_after" "knowledge/gotchas/new-name.md" "inrepo rename: new path present in HEAD"
+
 assert_summary

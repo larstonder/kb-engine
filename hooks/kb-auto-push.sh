@@ -102,12 +102,48 @@ if [ "$KB_MODE" = "inrepo" ] && ! git -C "$KB_DIR_ABS" rev-parse --git-dir >/dev
   exit 0
 fi
 
+# Parse `git status --porcelain -u -- .` output into two temp files.
+# $1=prefix (from rev-parse --show-prefix), $2=entry regex, $3=commit-set file, $4=validate-set file.
+# commit-set: all changed KB-relative paths (add/modify/delete/rename-old/rename-new).
+# validate-set: only added/modified/rename-new category .md files (deletions/rename-old are NEVER validated).
+# Uses character-index extraction (not awk $2) so paths containing spaces are preserved.
+_parse_porcelain_paths() {
+  local prefix="$1" entry_re="$2" commit_f="$3" validate_f="$4"
+  : > "$commit_f"; : > "$validate_f"
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    local st pathpart
+    st="${line:0:2}"
+    pathpart="${line:3}"
+    if printf '%s' "$st" | grep -qE '[RC]'; then
+      # Rename/copy: "XY old -> new" — old side is gone, new side is the result.
+      local old_path new_path
+      old_path="${pathpart%% -> *}"; old_path="${old_path#"$prefix"}"
+      new_path="${pathpart#* -> }";  new_path="${new_path#"$prefix"}"
+      printf '%s\n' "$old_path" >> "$commit_f"
+      printf '%s\n' "$new_path" >> "$commit_f"
+      printf '%s' "$new_path" | grep -qE "$entry_re" && printf '%s\n' "$new_path" >> "$validate_f" || true
+    elif printf '%s' "$st" | grep -q 'D'; then
+      # Deletion: path is gone — commit it but never validate (file does not exist).
+      local del_path="${pathpart#"$prefix"}"
+      printf '%s\n' "$del_path" >> "$commit_f"
+    else
+      # Added, modified, untracked (??).
+      local chg_path="${pathpart#"$prefix"}"
+      printf '%s\n' "$chg_path" >> "$commit_f"
+      printf '%s' "$chg_path" | grep -qE "$entry_re" && printf '%s\n' "$chg_path" >> "$validate_f" || true
+    fi
+  done
+}
+
 # --- AUTO_COMMIT=false: validate only, never stage/commit/push (any mode) ---
 if [ "$KB_AUTO_COMMIT" = "false" ]; then
   PREFIX=$(kb_git rev-parse --show-prefix 2>/dev/null)
-  ENTRIES=$(kb_git status --porcelain -u -- . 2>/dev/null | awk '{print $2}' \
-            | sed "s|^${PREFIX}||" \
-            | grep -E "(^|/)($(kb_categories_alt))/.*\.md$" || true)
+  _COMMIT_F=$(mktemp); _VALIDATE_F=$(mktemp)
+  kb_git status --porcelain -u -- . 2>/dev/null \
+    | _parse_porcelain_paths "$PREFIX" "(^|/)($(kb_categories_alt))/.*\\.md\$" "$_COMMIT_F" "$_VALIDATE_F"
+  ENTRIES=$(cat "$_VALIDATE_F")
+  rm -f "$_COMMIT_F" "$_VALIDATE_F"
   if [ -n "$ENTRIES" ]; then
     VALIDATION=$(validate_staged "$ENTRIES")
     [ -n "$VALIDATION" ] && QUARANTINED=1
@@ -124,10 +160,14 @@ if [ "$KB_MODE" = "inrepo" ]; then
   done
   PREFIX=$(kb_git rev-parse --show-prefix 2>/dev/null)
   # All changed paths under the KB dir; -u expands untracked dirs to individual files.
-  ALL=$(kb_git status --porcelain -u -- . 2>/dev/null | awk '{print $2}' \
-        | sed "s|^${PREFIX}||" | sed '/^$/d')
+  # Deletions and rename-old sides go to the commit set but never the validate set.
+  _COMMIT_F=$(mktemp); _VALIDATE_F=$(mktemp)
+  kb_git status --porcelain -u -- . 2>/dev/null \
+    | _parse_porcelain_paths "$PREFIX" "(^|/)($(kb_categories_alt))/.*\\.md\$" "$_COMMIT_F" "$_VALIDATE_F"
+  ALL=$(cat "$_COMMIT_F" | sed '/^$/d')
+  ENTRIES=$(cat "$_VALIDATE_F")
+  rm -f "$_COMMIT_F" "$_VALIDATE_F"
   [ -z "$ALL" ] && end_prompts_and_exit
-  ENTRIES=$(printf '%s\n' "$ALL" | grep -E "(^|/)($(kb_categories_alt))/.*\.md$" || true)
   BAD=""
   if [ -n "$ENTRIES" ]; then
     VALIDATION=$(validate_staged "$ENTRIES")
@@ -140,8 +180,14 @@ if [ "$KB_MODE" = "inrepo" ]; then
   fi
   GOOD=$(comm -23 <(printf '%s\n' "$ALL" | sort -u) <(printf '%s\n' "$BAD" | sed '/^$/d' | sort -u))
   if [ -n "$GOOD" ]; then
+    # Stage each path individually: existing files are added normally; paths already
+    # staged by the user (rename-old-sides from git mv) will fail `add` because the
+    # file is gone, but the rename is already in the index so the commit still works.
+    printf '%s\n' "$GOOD" | sed '/^$/d' | while IFS= read -r p; do
+      kb_git add -- "$p" 2>>"$ERR_LOG" || true
+    done
     # shellcheck disable=SC2046  # intentional word-split: path list must expand to separate args
-    kb_git_commit_scoped "Update KB" $(printf '%s\n' "$GOOD" | sed '/^$/d') 2>>"$ERR_LOG" \
+    kb_git commit -m "Update KB" -- $(printf '%s\n' "$GOOD" | sed '/^$/d') 2>>"$ERR_LOG" \
       || log_err "inrepo scoped commit failed"
   fi
   end_prompts_and_exit
