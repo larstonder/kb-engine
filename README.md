@@ -37,8 +37,9 @@ This copies `hooks/`, `lib/`, and `skills/knowledge-base/` under `<project-dir>/
 With the plugin installed, run the `/kb` slash command from inside the project you want a KB for:
 
 ```
-/kb init <kb-dir> --preset general|monorepo [--mode standalone|submodule] [--branch <branch>]
+/kb init <kb-dir> --preset general|monorepo [--mode standalone|submodule|inrepo] [--branch <branch>]
 /kb sync
+/kb doctor
 ```
 
 `/kb` wraps the bundled CLI (the plugin doesn't put `kb` on your `PATH`). If you installed via `install.sh` or a plain clone instead, call the CLI directly from the engine repo, passing `--project`:
@@ -46,22 +47,25 @@ With the plugin installed, run the `/kb` slash command from inside the project y
 ```sh
 ./bin/kb init <kb-dir> --preset general|monorepo \
             [--categories a,b,c] \
-            [--mode standalone|submodule] \
+            [--mode standalone|submodule|inrepo] \
             [--branch <branch>] \
+            [--auto-commit|--no-auto-commit] \
             --project <project-dir>
 ./bin/kb sync --project <project-dir>
+./bin/kb doctor --project <project-dir>
 ```
 
-`init` creates the category folders, copies content-template files (CONVENTIONS.md, INDEX.md, BACKLOG.md, README.md, .gitignore, .gitattributes), vendors the validators into `<kb-dir>/.kb/bin/`, installs the git pre-commit hook, and writes `.kbconfig` in the project root. `sync` re-vendors the validators and re-installs the pre-commit hook after an engine update. The lifecycle hooks no-op in any project without a `.kbconfig`, so the KB only becomes active once `init` has run (and from the next session start).
+`init` creates the category folders, copies content-template files (CONVENTIONS.md, INDEX.md, BACKLOG.md, README.md, .gitignore, .gitattributes), vendors the validators into `<kb-dir>/.kb/bin/`, installs the git pre-commit hook (standalone/submodule only), and writes `.kbconfig` in the project root. `sync` re-vendors the validators and re-installs the pre-commit hook after an engine update. `doctor` checks dependencies, config, kb.json validity and version, vendored validators, and git state. The lifecycle hooks no-op in any project without a `.kbconfig`, so the KB only becomes active once `init` has run (and from the next session start).
 
 ---
 
 ## How the content repo is stored
 
-**The content directory is always its own git repository.** This is a hard requirement, not just the default, because the Stop hook stages and pushes via `git -C <kb-dir>` (`git add -A` → commit → `push`). If `<kb-dir>` were a plain folder inside another repo, those commands would resolve to that **parent** repo and auto-commit/push your whole project. So:
+Three modes are available, selected via `--mode` at `kb init` time:
 
-- **`standalone` (default)** — `kb init` runs `git init` on `<kb-dir>`, making it a self-contained repo. `init` does **not** add a remote.
-- **`submodule`** — `<kb-dir>` is a git submodule, i.e. still its own repo, mounted in the parent project.
+- **`standalone` (default)** - `kb init` runs `git init` on `<kb-dir>`, making it a self-contained repo. `init` does **not** add a remote.
+- **`submodule`** - `<kb-dir>` is a git submodule, i.e. still its own repo, mounted in the parent project.
+- **`inrepo`** - the KB is plain files tracked inside your main project repo. See below.
 
 ### Local-only (no remote)
 
@@ -80,9 +84,15 @@ If `<kb-dir>` lives inside another git repo (e.g. `.knowledge/` in your app), th
 echo '<kb-dir>/' >> .gitignore   # in the PARENT project
 ```
 
-### Not supported: KB tracked inside your main project repo
+### inrepo: KB tracked inside your main project repo
 
-There is **no mode** where the KB is plain files committed to your application's own repo (one shared history). That would require the hooks to scope git to a subdirectory and forgo auto-push, which the engine deliberately doesn't do — the KB's per-session auto-commit/auto-push lifecycle is kept isolated from your app's history, branches, and PRs. Keep the KB as its own repo (standalone, remote optional).
+`--mode inrepo` places the KB as plain files inside your application's own git history - do **not** gitignore it.
+
+At Stop, the hook commits **only** the KB directory via a scoped pathspec commit (`git commit -- <kb-relative-paths>`). It **never pushes** and never pulls: the KB rides your normal branch workflow.
+
+Caveat: with `AUTO_COMMIT=true`, KB commits land on whatever branch you have checked out, so they interleave with your feature work and ride along in PRs. If that is undesirable, set `AUTO_COMMIT=false` (the default for inrepo) and commit the KB dir yourself.
+
+The engine does **not** install a pre-commit hook in inrepo mode (there is no separate `.git` to hook). Validation still runs at Stop. To validate KB entries on your own commits, wire `<kb-dir>/.kb/bin/validate.sh` into your project's pre-commit hook.
 
 ---
 
@@ -96,8 +106,25 @@ Written by `kb init`. Read by every hook and `kb sync` at runtime.
 
 ```sh
 KB_DIR=".knowledge"   # relative (or absolute) path from project root to the content repo
-MODE="standalone"     # standalone | submodule
+MODE="standalone"     # standalone | submodule | inrepo
+AUTO_COMMIT="true"    # true | false  (see below)
 BRANCH="main"
+```
+
+### AUTO_COMMIT
+
+Universal knob that controls what the Stop hook does with KB changes:
+
+- `true` - Stop commits the KB. For standalone/submodule it then pushes to the remote; for inrepo it commits but never pushes.
+- `false` - Stop validates only; no staging or committing. You commit the KB yourself.
+
+Defaults: `true` for standalone and submodule, `false` for inrepo.
+
+Override at init time:
+
+```sh
+kb init <dir> --mode inrepo --auto-commit      # force true
+kb init <dir> --mode standalone --no-auto-commit  # force false
 ```
 
 ### `kb.json` (content repo root)
