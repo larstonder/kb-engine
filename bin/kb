@@ -7,7 +7,7 @@ die() { echo "kb: $1" >&2; exit 1; }
 
 cmd_init() {
   local dir="" preset="general" cats="" mode="standalone" branch="main" project="$PWD" autocommit="" force=""
-  dir="$1"; shift || true
+  dir="${1:-}"; shift || true
   [ -n "$dir" ] || die "usage: kb init <dir> [--preset X] [--categories a,b] [--mode M] [--branch B] [--project P]"
   while [ $# -gt 0 ]; do case "$1" in
     --preset)     preset="$2";  shift 2;;
@@ -154,9 +154,39 @@ cmd_doctor() {
   [ "$fail" = 0 ] && { printf 'kb doctor: OK\n'; return 0; } || { printf 'kb doctor: problems found\n'; return 1; }
 }
 
+cmd_help() {
+  cat <<'EOF'
+kb - knowledge base engine CLI
+
+Usage:
+  kb init <dir> [options]      Scaffold a KB content repo and write .kbconfig
+  kb sync [--project <dir>]    Re-vendor validators and re-install the pre-commit hook
+  kb doctor [--project <dir>]  Health-check a project's KB
+  kb help                      Show this help
+
+init options:
+  --preset general|monorepo            Category set + checks (default: general)
+  --categories a,b,c                   Override the preset's category list
+  --mode standalone|submodule|inrepo   Where the KB lives (default: standalone)
+  --auto-commit | --no-auto-commit     Override Stop-hook auto-commit
+                                       (default: true, or false for inrepo)
+  --force                              Overwrite an existing kb.json
+  --branch <name>                      Sync branch (default: main)
+  --project <dir>                      Project root (default: current dir)
+
+Modes:
+  standalone  KB is its own git repo (init runs git init; no remote added)
+  submodule   KB is a git submodule of your project
+  inrepo      KB is plain files tracked inside your main repo; never pushes
+
+Docs: https://github.com/larstonder/kb-engine
+EOF
+}
+
 case "${1:-}" in
   init) shift; cmd_init "$@";;
   sync) shift; cmd_sync "$@";;
   doctor) shift; cmd_doctor "$@";;
-  *) die "usage: kb {init|sync|doctor} ...";;
+  help|--help|-h) cmd_help;;
+  *) die "unknown command: ${1:-}. Run 'kb help'.";;
 esac

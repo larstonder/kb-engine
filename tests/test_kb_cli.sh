@@ -47,4 +47,17 @@ assert_contains "$(cat "$sa/.knowledge/kb.json")" '"custom"' "re-run preserves e
 bash bin/kb init "$sa/.knowledge" --preset general --force --project "$sa"
 assert_eq "" "$(grep -o custom "$sa/.knowledge/kb.json" || true)" "--force resets kb.json to preset"
 
+# kb help shows the full usage (commands + modes + flags)
+help_out="$(bash bin/kb help 2>&1)"; assert_eq "0" "$?" "kb help exits 0"
+assert_contains "$help_out" "kb init <dir>" "help lists init"
+assert_contains "$help_out" "inrepo" "help documents inrepo mode"
+assert_contains "$help_out" "--auto-commit" "help documents flags"
+assert_contains "$help_out" "$(bash bin/kb --help 2>&1)" "--help matches help"
+# kb init with no dir prints usage, does NOT crash with 'unbound variable'
+ni_out="$(bash bin/kb init 2>&1)"; ni_rc=$?
+assert_eq "" "$(printf '%s' "$ni_out" | grep -i 'unbound variable' || true)" "kb init (no dir) does not crash"
+assert_contains "$ni_out" "usage: kb init <dir>" "kb init (no dir) prints usage"
+# unknown command points at help
+unk_out="$(bash bin/kb bogus 2>&1 || true)"; assert_contains "$unk_out" "kb help" "unknown command points to kb help"
+
 assert_summary
